@@ -1,0 +1,73 @@
+name: Build and Release gubgubOS
+
+on:
+  push:
+    branches:
+      - main
+      - master
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y nasm xorriso
+
+      - name: Make build script executable
+        run: chmod +x build.sh
+
+      - name: Run build script
+        run: ./build.sh
+
+      - name: Determine next pre-tag version
+        id: tag_version
+        run: |
+          # Get the latest tag matching 'pre*' across all branches
+          LAST_TAG=$(git tag -l "pre*" | sort -V | tail -n 1)
+
+          if [ -z "$LAST_TAG" ]; then
+            # Default starting tag if no pre-tags exist yet
+            NEXT_TAG="pre0.1"
+          else
+            # Extract number after 'pre' (handles decimals like pre0.3 -> 0.3)
+            VERSION_NUM=$(echo "$LAST_TAG" | sed 's/^pre//')
+
+            # Separate major/minor (e.g., 0 and 3)
+            MAJOR=$(echo "$VERSION_NUM" | cut -d. -f1)
+            MINOR=$(echo "$VERSION_NUM" | cut -d. -f2)
+
+            # Increment minor version number
+            NEXT_MINOR=$((MINOR + 1))
+            NEXT_TAG="pre${MAJOR}.${NEXT_MINOR}"
+          fi
+
+          echo "LATEST_TAG=$LAST_TAG"
+          echo "NEW_TAG=$NEXT_TAG"
+          echo "new_tag=$NEXT_TAG" >> $GITHUB_OUTPUT
+
+      - name: Create Git Tag and Push
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag ${{ steps.tag_version.outputs.new_tag }}
+          git push origin ${{ steps.tag_version.outputs.new_tag }}
+
+      - name: Publish Release with ISO
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.tag_version.outputs.new_tag }}
+          name: Release ${{ steps.tag_version.outputs.new_tag }}
+          prerelease: true
+          files: gubgubOS.iso
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
