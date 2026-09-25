@@ -82,16 +82,18 @@ jobs:
         run: |
           cd website_repo/GoobyOS
 
-          # Matches anything starting with 'v', followed by numbers/dots, up to -ALPHA-RELEASE
-          # e.g., v10.26-ALPHA-RELEASE -> pre0.1-ALPHA-RELEASE
-          sed -i 's|v[0-9.]*-ALPHA-RELEASE|${{ steps.tag_version.outputs.new_tag }}-ALPHA-RELEASE|' index.html
+          # Matches EITHER 'v' OR 'pre' followed by numbers/dots before -ALPHA-RELEASE
+          sed -i -E 's/(v|pre)[0-9.]*-ALPHA-RELEASE/${{ steps.tag_version.outputs.new_tag }}-ALPHA-RELEASE/' index.html
 
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
-          # Commit and push only if changes were made
-          if [[ -n $(git status -s) ]]; then
-            git add index.html
+          # Stage and commit changes safely
+          git add index.html
+          if ! git diff --cached --quiet; then
             git commit -m "Update gubgubOS version to ${{ steps.tag_version.outputs.new_tag }}-ALPHA-RELEASE"
             git push
+          else
+            echo "No changes to commit."
           fi
+
