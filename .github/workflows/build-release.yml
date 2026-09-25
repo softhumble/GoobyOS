@@ -71,3 +71,27 @@ jobs:
           files: gubgubOS.iso
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Checkout website repository
+        uses: actions/checkout@v4
+        with:
+          repository: softhumble/softhumble.github.io
+          token: ${{ secrets.PAT_TOKEN }}
+          path: website_repo
+
+      - name: Update tag in website HTML file
+        run: |
+          cd website_repo/GoobyOS
+
+          # Matches anything starting with 'v', followed by numbers/dots, up to -ALPHA-RELEASE
+          # e.g., v10.26-ALPHA-RELEASE -> pre0.1-ALPHA-RELEASE
+          sed -i 's|v[0-9.]*-ALPHA-RELEASE|${{ steps.tag_version.outputs.new_tag }}-ALPHA-RELEASE|' index.html
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          # Commit and push only if changes were made
+          if [[ -n $(git status -s) ]]; then
+            git add index.html
+            git commit -m "Update gubgubOS version to ${{ steps.tag_version.outputs.new_tag }}-ALPHA-RELEASE"
+            git push
+          fi
